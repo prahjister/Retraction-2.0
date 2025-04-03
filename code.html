@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retraction Test Generator</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+        .controls, .preview {
+            flex: 1;
+            min-width: 400px; /* Increased min-width for better layout */
+            margin-bottom: 20px; /* Add space when wrapping */
+        }
+        .controls form div {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap; /* Allow input/label pairs to wrap */
+        }
+        .controls label {
+            min-width: 180px;
+            font-weight: bold;
+            flex-shrink: 0; /* Prevent label from shrinking */
+        }
+        .controls input[type="number"], .controls input[type="text"], .controls textarea {
+            flex-grow: 1;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            min-width: 80px; /* Ensure input has some minimum width */
+        }
+         .controls textarea {
+            min-height: 60px;
+            font-family: monospace;
+            width: 100%; /* Make textarea take full width */
+         }
+         /* Adjust checkbox alignment */
+         .controls div:has(input[type="checkbox"]) {
+            align-items: center;
+         }
+         .controls input[type="checkbox"] {
+             flex-grow: 0;
+         }
+
+        .controls button {
+            padding: 10px 15px;
+            margin-top: 10px;
+            margin-right: 10px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        .preview h3 {
+            margin-top: 0;
+        }
+        #visualization {
+            font-family: monospace;
+            white-space: pre;
+            border: 1px solid #eee;
+            padding: 10px;
+            background-color: #f9f9f9;
+            overflow-x: auto; /* Handle large grids */
+            font-size: 0.9em; /* Slightly smaller font for denser display */
+        }
+        .warning {
+            color: orange;
+            font-size: 0.9em;
+            margin-left: 5px;
+        }
+         .info {
+            font-size: 0.85em;
+            color: #555;
+         }
+    </style>
+    <!-- jsPDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<div class="controls">
+    <h2>Retraction Test Generator</h2>
+    <form id="settingsForm">
+
+        <h4>Bed & Nozzle</h4>
+        <div>
+            <label for="bedX">Bed X Dimension (mm):</label>
+            <input type="number" id="bedX" value="220" step="1" required>
+            <span class="warning">(Suggest 0 for Delta)</span>
+        </div>
+        <div>
+            <label for="bedY">Bed Y Dimension (mm):</label>
+            <input type="number" id="bedY" value="220" step="1" required>
+             <span class="warning">(Suggest 0 for Delta)</span>
+        </div>
+         <div>
+            <label for="originCenter">Origin is Center (Delta):</label>
+            <input type="checkbox" id="originCenter">
+        </div>
+        <div>
+            <label for="printBorder">No-Print Border (mm):</label>
+            <input type="number" id="printBorder" value="10" step="1" required min="0">
+        </div>
+        <div>
+            <label for="nozzleDiameter">Nozzle Diameter (mm):</label>
+            <input type="number" id="nozzleDiameter" value="0.4" step="0.05" required>
+        </div>
+         <div>
+            <label for="filamentDiameter">Filament Diameter (mm):</label>
+            <input type="number" id="filamentDiameter" value="1.75" step="0.01" required>
+        </div>
+
+        <h4>Retraction Settings Range</h4>
+        <div>
+            <label for="startDist">Start Retraction Dist (mm):</label>
+            <input type="number" id="startDist" value="0.5" step="0.1" required>
+        </div>
+        <div>
+            <label for="endDist">End Retraction Dist (mm):</label>
+            <input type="number" id="endDist" value="5.0" step="0.1" required>
+        </div>
+         <div>
+            <label for="startSpeed">Start Retraction Speed (mm/s):</label>
+            <input type="number" id="startSpeed" value="10" step="1" required>
+        </div>
+        <div>
+            <label for="endSpeed">End Retraction Speed (mm/s):</label>
+            <input type="number" id="endSpeed" value="50" step="1" required>
+        </div>
+
+        <h4>Print Settings</h4>
+         <div>
+            <label for="layerHeight">Layer Height (mm):</label>
+            <input type="number" id="layerHeight" value="0.2" step="0.02" required>
+        </div>
+         <div>
+            <label for="extrusionMultiplier">Extrusion Multiplier (%):</label>
+            <input type="number" id="extrusionMultiplier" value="80" step="1" min="50" max="150" required> <!-- Default 80 -->
+             <span class="info">(Flow Rate)</span>
+        </div>
+         <div>
+            <label for="zHopHeight">Z Hop Height (mm):</label>
+            <input type="number" id="zHopHeight" value="0.4" step="0.1" required min="0">
+            <span class="info">(0 to disable)</span>
+        </div>
+        <div>
+            <label for="nozzleTemp">Nozzle Temperature (°C):</label>
+            <input type="number" id="nozzleTemp" value="200" step="1" required>
+        </div>
+        <div>
+            <label for="bedTemp">Bed Temperature (°C):</label>
+            <input type="number" id="bedTemp" value="50" step="1" required>
+        </div>
+         <div>
+            <label for="initialPrintSpeed">Initial Print Speed (mm/s):</label>
+            <input type="number" id="initialPrintSpeed" value="40" step="1" required> <!-- New field, default 40 -->
+             <span class="info">(First 2 layers)</span>
+        </div>
+         <div>
+            <label for="regularPrintSpeed">Regular Print Speed (mm/s):</label>
+            <input type="number" id="regularPrintSpeed" value="80" step="1" required> <!-- Renamed, default 80 -->
+        </div>
+         <div>
+            <label for="travelSpeed">Travel Speed (mm/s):</label>
+            <input type="number" id="travelSpeed" value="150" step="1" required>
+        </div>
+         <div>
+            <label for="cubeHeight">Test Cube Height (mm):</label>
+            <input type="number" id="cubeHeight" value="5" step="1" required>
+        </div>
+         <div>
+            <label for="cubeSize">Test Cube Size (mm):</label>
+            <input type="number" id="cubeSize" value="20" step="1" required> <!-- Default 20 -->
+        </div>
+         <div>
+            <label for="cubeSpacing">Min Cube Spacing (mm):</label>
+            <input type="number" id="cubeSpacing" value="25" step="1" required>
+        </div>
+
+        <h4>Custom Start G-code</h4>
+        <div>
+            <label for="startGcode">Start G-code:</label>
+            <textarea id="startGcode">G28 ; Home all axes
+G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
+; --- End of Custom Start G-code ---</textarea>
+        </div>
+
+        <button type="button" id="generateBtn">Generate G-code</button>
+        <button type="button" id="savePdfBtn">Save Key as PDF</button>
+    </form>
+</div>
+
+<div class="preview">
+    <h3>Test Grid Layout Preview</h3>
+    <p class="info">
+        Each block shows: Print Order (#N), Retraction Distance (mm) / Retraction Speed (mm/s). <br>
+        Print order is row-by-row (bottom-to-top), left-to-right within each row. <br>
+        Distance increases left-to-right (X-axis). Speed increases bottom-to-top (Y-axis).
+    </p>
+    <div id="visualization">Calculating...</div>
+     <p class="info" style="margin-top: 20px;">
+        <b>Interpretation Guide:</b>
+        <br>- Examine the print for stringing (fine hairs) between cubes. Use the (#N) to correlate.
+        <br>- Look for blobs or zits on the corners where retraction/unretraction occurs.
+        <br>- Identify the cube(s) with the *least* stringing and *minimal* surface defects.
+        <br>- Note the corresponding Retraction Distance and Speed. Start with these values in your slicer.
+        <br>- Often, the fastest speed and shortest distance that *works well* is optimal. Very high speeds or distances can cause other issues like filament grinding or nozzle clogs. Find the balance.
+    </p>
+</div>
+
+<script>
+    // Make jsPDF globally accessible
+    const { jsPDF } = window.jspdf;
+
+    // --- DOM Elements ---
+    const form = document.getElementById('settingsForm');
+    const generateBtn = document.getElementById('generateBtn');
+    const savePdfBtn = document.getElementById('savePdfBtn');
+    const visualizationDiv = document.getElementById('visualization');
+    const inputs = form.querySelectorAll('input, textarea');
+
+    // --- Constants ---
+    const F_MM_PER_MIN = 60; // Factor to convert mm/s to mm/min
+
+    // --- Core Calculation and Visualization Logic ---
+    function calculateAndVisualize() {
+        // Read all input values
+        const settings = {};
+        inputs.forEach(input => {
+            settings[input.id] = (input.type === 'checkbox') ? input.checked : (input.type === 'number' ? parseFloat(input.value) : input.value);
+        });
+
+        // Basic validation
+        if (settings.endDist < settings.startDist || settings.endSpeed < settings.startSpeed) {
+            visualizationDiv.textContent = "Error: End value cannot be less than start value for distance or speed.";
+            return null; // Indicate error
+        }
+        if (settings.layerHeight <= 0 || settings.nozzleDiameter <= 0 || settings.filamentDiameter <= 0 ||
+            settings.cubeSize <= 0 || settings.cubeHeight <= 0 || settings.printBorder < 0 ||
+            settings.zHopHeight < 0 || settings.extrusionMultiplier <= 0 ||
+            settings.initialPrintSpeed <= 0 || settings.regularPrintSpeed <= 0) { // Added speed checks
+             visualizationDiv.textContent = "Error: Dimensions/Settings must be positive (Border/ZHop >= 0, Extrusion/Speeds > 0).";
+            return null;
+        }
+
+        // Calculate grid dimensions
+        const cubeSize = settings.cubeSize;
+        const spacing = settings.cubeSpacing;
+        const effectiveSpacing = cubeSize + spacing; // Center-to-center distance
+        const printBorder = settings.printBorder;
+
+        // Adjust bed dimensions for origin setting and border
+        const bedSizeX = settings.bedX;
+        const bedSizeY = settings.bedY;
+        const safeBedX = Math.max(1, bedSizeX); // Avoid division by zero or negative beds
+        const safeBedY = Math.max(1, bedSizeY);
+
+        // Calculate the usable area *inside* the border
+        const availableX = Math.max(0, safeBedX - 2 * printBorder);
+        const availableY = Math.max(0, safeBedY - 2 * printBorder);
+
+        if (availableX < cubeSize || availableY < cubeSize) {
+             visualizationDiv.textContent = `Error: Not enough space for even one cube within the ${printBorder}mm border.\nAvailable Area: ${availableX.toFixed(1)} x ${availableY.toFixed(1)} mm`;
+            return null;
+        }
+
+        // Max number of cubes that fit + spacing *within the available area*
+        const numX = Math.max(1, Math.floor((availableX - cubeSize) / effectiveSpacing) + 1);
+        const numY = Math.max(1, Math.floor((availableY - cubeSize) / effectiveSpacing) + 1);
+
+        // Calculate grid total size (based on number of cubes and spacing)
+        const totalGridWidth = numX * cubeSize + Math.max(0, numX - 1) * spacing;
+        const totalGridHeight = numY * cubeSize + Math.max(0, numY - 1) * spacing;
+
+        // Calculate starting position (bottom-left corner of the grid's bounding box)
+        let gridStartX, gridStartY; // Renamed to avoid confusion with prime line start
+        if (settings.originCenter) {
+            gridStartX = -totalGridWidth / 2;
+            gridStartY = -totalGridHeight / 2;
+            gridStartX = Math.max(gridStartX, -safeBedX / 2 + printBorder);
+            gridStartY = Math.max(gridStartY, -safeBedY / 2 + printBorder);
+        } else {
+            const offsetX = Math.max(0, (availableX - totalGridWidth) / 2);
+            const offsetY = Math.max(0, (availableY - totalGridHeight) / 2);
+            gridStartX = printBorder + offsetX;
+            gridStartY = printBorder + offsetY;
+        }
+
+        // Calculate retraction steps
+        const distStep = (numX > 1) ? (settings.endDist - settings.startDist) / (numX - 1) : 0;
+        const speedStep = (numY > 1) ? (settings.endSpeed - settings.startSpeed) / (numY - 1) : 0;
+
+        // Generate visualization text
+        let vizText = `Effective Print Area: ${availableX.toFixed(1)} x ${availableY.toFixed(1)} mm (with ${printBorder}mm border)\n`;
+        vizText += `Grid Dimensions: ${numX} (Dist) x ${numY} (Speed)\n`;
+        vizText += `Grid Size: ${totalGridWidth.toFixed(1)} x ${totalGridHeight.toFixed(1)} mm\n`;
+        vizText += `Grid Bottom-Left Coord: X=${gridStartX.toFixed(1)}, Y=${gridStartY.toFixed(1)}\n\n`;
+        vizText += `Print Order (#N), Retraction Distance (mm) ->\n`;
+        vizText += `Speed (mm/s) ^\n\n`;
+
+        const gcodeGridData = []; // Array to store data in G-code print order (Y=0 up, X=0 right)
+
+        // Build the visualization text grid (display Y iterates bottom-up)
+        for (let displayY = numY - 1; displayY >= 0; displayY--) {
+            const currentSpeed = settings.startSpeed + displayY * speedStep;
+            let rowText = `  | `;
+            for (let x = 0; x < numX; x++) {
+                const printOrderIndex = displayY * numX + x + 1;
+                const currentDist = settings.startDist + x * distStep;
+                const orderStr = `(#${printOrderIndex})`.padEnd(6);
+                const dataStr = `${currentDist.toFixed(2)}/${currentSpeed.toFixed(1)}`.padEnd(10);
+                rowText += `${orderStr}${dataStr} | `;
+            }
+            vizText += rowText + "\n";
+        }
+
+        // Build the G-code grid data in the actual print order (Y=0 first)
+         for (let y = 0; y < numY; y++) {
+             const rowData = [];
+             const currentSpeed = settings.startSpeed + y * speedStep;
+             for (let x = 0; x < numX; x++) {
+                 const currentDist = settings.startDist + x * distStep;
+                 const cubeBaseX = gridStartX + x * effectiveSpacing;
+                 const cubeBaseY = gridStartY + y * effectiveSpacing;
+                 const printOrderIndex = y * numX + x + 1;
+                 rowData.push({
+                     dist: currentDist,
+                     speed: currentSpeed,
+                     x: cubeBaseX,
+                     y: cubeBaseY,
+                     printOrder: printOrderIndex
+                 });
+             }
+             gcodeGridData.push(rowData);
+         }
+
+        // Add X-axis labels (distances) at the bottom of the viz
+        vizText += `  └` + `-----------------`.repeat(numX) + `>\n    `; // Adjust underline length
+         for (let x = 0; x < numX; x++) {
+              const currentDist = settings.startDist + x * distStep;
+              const label = `${currentDist.toFixed(2)}mm`;
+              const totalWidthPerCell = 17; // Approx width: "(#NN)NN.NN/NN.N | "
+              const paddingNeeded = Math.max(0, totalWidthPerCell - label.length);
+              const leftPad = Math.floor(paddingNeeded / 2);
+              const rightPad = Math.ceil(paddingNeeded / 2);
+              vizText += ' '.repeat(leftPad) + label + ' '.repeat(rightPad);
+         }
+
+        visualizationDiv.textContent = vizText;
+
+        // Return calculated data needed for G-code
+        return {
+            settings,
+            grid: gcodeGridData, // Use the grid ordered for printing
+            numX,
+            numY,
+            effectiveSpacing,
+            cubeSize,
+            vizText // Include visualization text for PDF
+        };
+    }
+
+    // --- G-code Generation ---
+    function generateGcode() {
+        const calcData = calculateAndVisualize();
+        if (!calcData) {
+             alert("Cannot generate G-code due to input errors or insufficient space. Please check the settings and preview.");
+             return;
+        }
+
+        const { settings, grid, numX, numY, effectiveSpacing, cubeSize } = calcData;
+        if (!grid || grid.length === 0 || grid[0].length === 0) {
+             alert("Cannot generate G-code: Grid calculation failed.");
+             return;
+        }
+
+        // --- G-code Settings & Constants ---
+        const nozzleDiameter = settings.nozzleDiameter;
+        const filamentDiameter = settings.filamentDiameter;
+        const layerHeight = settings.layerHeight;
+        const cubeHeight = settings.cubeHeight;
+        const printBorder = settings.printBorder;
+        const zHopHeight = settings.zHopHeight;
+        const originCenter = settings.originCenter;
+        const bedX = settings.bedX;
+        const bedY = settings.bedY;
+        const extrusionMultiplierPercent = settings.extrusionMultiplier; // e.g., 80
+        const initialPrintSpeed = settings.initialPrintSpeed; // e.g., 40
+        const regularPrintSpeed = settings.regularPrintSpeed; // e.g., 80
+
+        const initialPrintSpeedF = initialPrintSpeed * F_MM_PER_MIN;
+        const regularPrintSpeedF = regularPrintSpeed * F_MM_PER_MIN;
+        const travelSpeedF = settings.travelSpeed * F_MM_PER_MIN;
+        const zHopSpeedF = travelSpeedF > 5000 ? travelSpeedF : 5000;
+        const firstLayerHeight = layerHeight; // Keep first layer same for simplicity
+        const primeSpeedF = initialPrintSpeedF * 0.5; // Base prime on initial speed
+
+        const flowMultiplier = extrusionMultiplierPercent / 100.0;
+        const extrusionWidth = nozzleDiameter * 1.1;
+        const filamentArea = Math.PI * Math.pow(filamentDiameter / 2, 2);
+        const baseExtrusionPerMM = (layerHeight * extrusionWidth) / filamentArea;
+        const baseFirstLayerExtrusionPerMM = (firstLayerHeight * extrusionWidth) / filamentArea; // Technically same if LH==FLH
+
+        const finalExtrusionMultiplier = baseExtrusionPerMM * flowMultiplier;
+        const finalFirstLayerExtrusionMultiplier = baseFirstLayerExtrusionPerMM * flowMultiplier;
+
+        const numLayers = Math.max(1, Math.ceil(cubeHeight / layerHeight));
+        const wallCount = 2;
+
+        let gcode = [];
+
+        // --- G-code Header ---
+        gcode.push(`; G-code generated by Retraction Test Generator`);
+        gcode.push(`;`);
+        gcode.push(`; --- SETTINGS USED ---`);
+        gcode.push(`; Bed Dimensions: ${bedX}x${bedY} mm ${originCenter ? '(Origin Center)' : ''}`);
+        gcode.push(`; No-Print Border: ${printBorder} mm`);
+        gcode.push(`; Extrusion Multiplier: ${extrusionMultiplierPercent}% (Flow: ${flowMultiplier.toFixed(3)})`);
+        gcode.push(`; Z Hop Height: ${zHopHeight} mm`);
+        gcode.push(`; Nozzle Dia: ${nozzleDiameter} mm, Filament Dia: ${filamentDiameter} mm`);
+        gcode.push(`; Layer Height: ${layerHeight} mm`);
+        gcode.push(`; Retraction Dist Range: ${settings.startDist.toFixed(2)} to ${settings.endDist.toFixed(2)} mm`);
+        gcode.push(`; Retraction Speed Range: ${settings.startSpeed.toFixed(1)} to ${settings.endSpeed.toFixed(1)} mm/s`);
+        gcode.push(`; Temps: Nozzle ${settings.nozzleTemp} C, Bed ${settings.bedTemp} C`);
+        gcode.push(`; Speeds: Initial ${initialPrintSpeed} mm/s (Layers 1-2), Regular ${regularPrintSpeed} mm/s, Travel ${settings.travelSpeed} mm/s`);
+        gcode.push(`; Cube Size: ${cubeSize}x${cubeSize}x${cubeHeight} mm, Spacing: ${settings.cubeSpacing} mm`);
+        gcode.push(`;`);
+        gcode.push(`; --- VISUALIZATION KEY & PRINT ORDER ---`);
+        gcode.push(`; (#N) = Print Order per Layer`);
+        gcode.push(`; Format: (#N) Distance (mm) / Speed (mm/s)`);
+        gcode.push(`; Distance ->`);
+        gcode.push(`; Speed ^`);
+        calcData.vizText.split('\n').forEach(line => gcode.push(`; ${line}`));
+        gcode.push(`;`);
+        gcode.push(`; --- INTERPRETATION GUIDE ---`);
+        gcode.push(`; 1. Examine the print for stringing (fine hairs between cubes).`);
+        gcode.push(`; 2. Look for blobs/zits on corners where retraction occurs.`);
+        gcode.push(`; 3. Identify the cube(s) (using #N) with MINIMAL stringing AND surface defects.`);
+        gcode.push(`; 4. Note the corresponding Retraction Distance/Speed (see key above).`);
+        gcode.push(`; 5. Use these optimal settings in your slicer profile.`);
+        gcode.push(`;    Tip: Often the fastest speed/shortest distance that works well is best.`);
+        gcode.push(`;`);
+        gcode.push(`; --- START G-CODE ---`);
+
+        // --- Initial Setup ---
+        gcode.push(`M82 ; Absolute extrusion mode`);
+        gcode.push(`M107 ; Fan off`);
+        gcode.push(`M140 S${settings.bedTemp} ; Set bed temperature (no wait)`);
+        gcode.push(`M104 S${settings.nozzleTemp} ; Set nozzle temperature (no wait)`);
+        gcode.push(`M190 S${settings.bedTemp} ; Wait for bed temperature`);
+        gcode.push(`M109 S${settings.nozzleTemp} ; Wait for nozzle temperature`);
+        gcode.push(`; --- Run Custom Start G-code ---`);
+        settings.startGcode.split('\n').forEach(line => {
+             const trimmedLine = line.trim();
+             if (trimmedLine && !trimmedLine.startsWith(';') && !trimmedLine.startsWith('---')) {
+                 gcode.push(trimmedLine);
+             }
+         });
+        gcode.push(`; --- End Custom Start G-code ---`);
+        gcode.push(`M83 ; Ensure Relative extrusion mode (VERY IMPORTANT!)`);
+        gcode.push(`G92 E0 ; Reset Extruder`);
+        gcode.push(`G0 Z${(firstLayerHeight + Math.max(2.0, zHopHeight)).toFixed(3)} F${travelSpeedF} ; Move Z up ready for prime`);
+
+        // --- Priming Line ---
+        gcode.push(`; --- Prime Line ---`);
+        let primeStartX, primeStartY, primeEndX, primeEndY;
+        const primeOffset = 2;
+        const primeLength = Math.min(50, (originCenter ? bedX : bedX - 2*printBorder) - 2*primeOffset);
+        if (originCenter) {
+            primeStartX = -bedX / 2 + printBorder + primeOffset;
+            primeStartY = -bedY / 2 + printBorder + primeOffset;
+            primeEndX = primeStartX + primeLength; primeEndY = primeStartY;
+        } else {
+            primeStartX = printBorder + primeOffset; primeStartY = printBorder + primeOffset;
+            primeEndX = primeStartX + primeLength; primeEndY = primeStartY;
+        }
+        gcode.push(`G0 F${travelSpeedF} X${primeStartX.toFixed(3)} Y${primeStartY.toFixed(3)} Z${firstLayerHeight.toFixed(3)} ; Move to prime start position`);
+        gcode.push(`G92 E0 ; Reset extruder before prime`);
+        let primeExtrusion = primeLength * finalFirstLayerExtrusionMultiplier;
+        gcode.push(`G1 F${primeSpeedF.toFixed(0)} X${primeEndX.toFixed(3)} E${primeExtrusion.toFixed(4)} ; Print prime line`);
+        gcode.push(`G1 E-1.0 F2100 ; Retract slightly after prime`);
+        gcode.push(`G92 E0 ; Reset extruder again`);
+        gcode.push(`; --- End Prime Line ---`);
+
+        // --- Printing Loop ---
+        let zHeight = 0;
+
+        for (let layer = 0; layer < numLayers; layer++) {
+            zHeight = (layer === 0) ? firstLayerHeight : firstLayerHeight + (layer * layerHeight);
+            // Determine current settings based on layer index
+            const currentPrintSpeedF = (layer < 2) ? initialPrintSpeedF : regularPrintSpeedF;
+            const currentFinalExtrusionMultiplier = (layer === 0) ? finalFirstLayerExtrusionMultiplier : finalExtrusionMultiplier; // Use first layer multiplier only for layer 0, regular for all others including layer 1
+
+            gcode.push(`\n; --- LAYER ${layer + 1} / ${numLayers} (Z = ${zHeight.toFixed(3)}) ---`);
+             gcode.push(`; Using Speed: ${((layer < 2) ? initialPrintSpeed : regularPrintSpeed)} mm/s`);
+
+            for (let y = 0; y < numY; y++) {
+                for (let x = 0; x < numX; x++) {
+                    const cube = grid[y][x];
+                    const baseX = cube.x;
+                    const baseY = cube.y;
+                    const retDist = cube.dist;
+                    const retSpeedF = cube.speed * F_MM_PER_MIN;
+                    const printOrder = cube.printOrder;
+
+                    gcode.push(`\n; Cube #${printOrder} (${x},${y}): Dist=${retDist.toFixed(2)}, Speed=${cube.speed.toFixed(1)}`);
+
+                    const c1 = { x: baseX, y: baseY };
+                    const c2 = { x: baseX + cubeSize, y: baseY };
+                    const c3 = { x: baseX + cubeSize, y: baseY + cubeSize };
+                    const c4 = { x: baseX, y: baseY + cubeSize };
+
+                    // --- Safe Travel Sequence Start ---
+                    let needsRetract = (printOrder > 1 || layer > 0);
+                    if (needsRetract && retDist > 0) {
+                        gcode.push(`G1 F${retSpeedF.toFixed(0)} E-${retDist.toFixed(4)} ; Retract (#${printOrder})`);
+                    }
+                    if (zHopHeight > 0) {
+                         gcode.push(`G1 Z${(zHeight + zHopHeight).toFixed(3)} F${zHopSpeedF} ; Z Hop Up`);
+                    }
+                    gcode.push(`G0 F${travelSpeedF.toFixed(0)} X${c1.x.toFixed(3)} Y${c1.y.toFixed(3)} ; Travel to cube #${printOrder}`);
+                    if (zHopHeight > 0) {
+                         gcode.push(`G1 Z${zHeight.toFixed(3)} F${zHopSpeedF} ; Z Hop Down`);
+                    }
+                    // --- Safe Travel Sequence End ---
+
+                    if (needsRetract && retDist > 0) {
+                         gcode.push(`G1 F${retSpeedF.toFixed(0)} E${retDist.toFixed(4)} ; Unretract (#${printOrder})`);
+                    }
+
+                    // Set print speed for this layer/cube
+                    gcode.push(`G1 F${currentPrintSpeedF.toFixed(0)} ; Set print speed for cube #${printOrder}`);
+
+                    // --- Bottom Layer (Layer 0) ---
+                    if (layer === 0) {
+                        gcode.push(`; Print Bottom Layer (#${printOrder})`);
+                        let e = cubeSize * currentFinalExtrusionMultiplier;
+                        gcode.push(`G1 X${c2.x.toFixed(3)} Y${c2.y.toFixed(3)} E${e.toFixed(4)}`);
+                        gcode.push(`G1 X${c3.x.toFixed(3)} Y${c3.y.toFixed(3)} E${e.toFixed(4)}`);
+                        gcode.push(`G1 X${c4.x.toFixed(3)} Y${c4.y.toFixed(3)} E${e.toFixed(4)}`);
+                        gcode.push(`G1 X${c1.x.toFixed(3)} Y${c1.y.toFixed(3)} E${e.toFixed(4)}`);
+                        const inset = extrusionWidth / 2;
+                        if (cubeSize > extrusionWidth + 0.1) {
+                            gcode.push(`G1 X${(c1.x + inset).toFixed(3)} Y${(c1.y + inset).toFixed(3)}`);
+                            const fillLength = (cubeSize - 2 * inset) * Math.sqrt(2);
+                            e = fillLength * currentFinalExtrusionMultiplier;
+                            gcode.push(`G1 X${(c3.x - inset).toFixed(3)} Y${(c3.y - inset).toFixed(3)} E${e.toFixed(4)}`);
+                        }
+                    } // End Bottom Layer Specifics
+
+                    // --- Walls (All layers) ---
+                    gcode.push(`; Print Walls (#${printOrder})`);
+                    for (let wall = 0; wall < wallCount; wall++) {
+                        const currentInset = (wall + 0.5) * extrusionWidth;
+                        const w_c1 = { x: baseX + currentInset, y: baseY + currentInset };
+                        const w_c2 = { x: baseX + cubeSize - currentInset, y: baseY + currentInset };
+                        const w_c3 = { x: baseX + cubeSize - currentInset, y: baseY + cubeSize - currentInset };
+                        const w_c4 = { x: baseX + currentInset, y: baseY + cubeSize - currentInset };
+                        const wallSegmentLength = (cubeSize - 2 * currentInset);
+
+                        if (wallSegmentLength <= 0.01) continue;
+
+                        gcode.push(`G1 F${travelSpeedF.toFixed(0)} X${w_c1.x.toFixed(3)} Y${w_c1.y.toFixed(3)}`); // Move to start
+                        gcode.push(`G1 F${currentPrintSpeedF.toFixed(0)}`); // Ensure correct speed is set
+
+                        // Use the extrusion multiplier appropriate for the *current* layer (layer 0 vs layers 1+)
+                        let e = wallSegmentLength * currentFinalExtrusionMultiplier;
+                        gcode.push(`G1 X${w_c2.x.toFixed(3)} Y${w_c2.y.toFixed(3)} E${e.toFixed(4)}`);
+                        gcode.push(`G1 X${w_c3.x.toFixed(3)} Y${w_c3.y.toFixed(3)} E${e.toFixed(4)}`);
+                        gcode.push(`G1 X${w_c4.x.toFixed(3)} Y${w_c4.y.toFixed(3)} E${e.toFixed(4)}`);
+                        gcode.push(`G1 X${w_c1.x.toFixed(3)} Y${w_c1.y.toFixed(3)} E${e.toFixed(4)}`);
+                    } // End wall loop
+                     gcode.push(`; End Cube #${printOrder}`);
+
+                } // End X loop
+            } // End Y loop
+        } // End Layer loop
+
+        // --- Cleanup G-code ---
+        gcode.push(`\n; --- END G-CODE ---`);
+        const lastCube = grid[numY-1][numX-1];
+        const lastRetDist = lastCube.dist;
+        const lastRetSpeedF = lastCube.speed * F_MM_PER_MIN;
+        if (lastRetDist > 0) {
+             gcode.push(`G1 F${lastRetSpeedF.toFixed(0)} E-${lastRetDist.toFixed(4)} ; Final Retract`);
+        } else {
+             gcode.push(`G1 E-1 F2100 ; Default small retract`);
+        }
+        gcode.push(`M82 ; Absolute extrusion mode`);
+        gcode.push(`G92 E0 ; Reset extruder distance`);
+
+        const finalZLift = Math.max(10, cubeHeight + zHopHeight + 2);
+        const lastZPos = zHeight + (zHopHeight > 0 ? zHopHeight : 0);
+        gcode.push(`G1 Z${(lastZPos + finalZLift).toFixed(3)} F${travelSpeedF} ; Move Z up clear of print`);
+
+        // Present print
+         let presentX, presentY;
+         const safeBedX = Math.max(1, bedX); const safeBedY = Math.max(1, bedY);
+         const safeBorder = printBorder;
+         if (originCenter) {
+            presentX = 0; presentY = -safeBedY / 2 + safeBorder + 5;
+         } else {
+            presentX = safeBorder + 5; presentY = safeBorder + 5;
+         }
+         presentX = Math.max(originCenter ? -safeBedX/2 : 0, Math.min(originCenter ? safeBedX/2 : safeBedX, presentX));
+         presentY = Math.max(originCenter ? -safeBedY/2 : 0, Math.min(originCenter ? safeBedY/2 : safeBedY, presentY));
+         gcode.push(`G0 F${travelSpeedF.toFixed(0)} X${presentX.toFixed(3)} Y${presentY.toFixed(3)} ; Present Print`);
+
+        gcode.push(`M104 S0 ; Turn off nozzle heater`);
+        gcode.push(`M140 S0 ; Turn off bed heater`);
+        gcode.push(`M107 ; Turn off fan`);
+        gcode.push(`M84 X Y E ; Disable X, Y, E steppers`);
+
+
+        // --- Trigger Download ---
+        const gcodeBlob = new Blob([gcode.join('\n')], { type: 'text/plain' });
+        const url = URL.createObjectURL(gcodeBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Update filename to include Flow value
+        const filename = `RetractionTest_${settings.startDist}-${settings.endDist}mm_${settings.startSpeed}-${settings.endSpeed}mms_Flow${extrusionMultiplierPercent}_Speeds${initialPrintSpeed}-${regularPrintSpeed}_ZHop${zHopHeight}_Border${printBorder}.gcode`;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log("G-code generated successfully.");
+    }
+
+
+    // --- PDF Generation ---
+    function saveKeyAsPdf() {
+        const calcData = calculateAndVisualize();
+         if (!calcData) {
+             alert("Cannot save PDF due to input errors or insufficient space. Please check the settings and preview.");
+             return;
+        }
+        const { vizText, settings } = calcData;
+
+        try {
+            const doc = new jsPDF();
+
+            doc.setFontSize(16);
+            doc.text("Retraction Test Key", 10, 15);
+
+            doc.setFontSize(10);
+            doc.text("Generated Parameters:", 10, 25);
+            let yPos = 30;
+            const lineSpacing = 5;
+
+            const params = [
+                `Bed: ${settings.bedX}x${settings.bedY} ${settings.originCenter ? '(Origin Center)' : ''}`,
+                `No-Print Border: ${settings.printBorder} mm`,
+                `Extrusion Multiplier: ${settings.extrusionMultiplier}%`,
+                `Z Hop Height: ${settings.zHopHeight} mm`,
+                `Nozzle: ${settings.nozzleDiameter}mm, Filament: ${settings.filamentDiameter}mm`,
+                `Layer Height: ${settings.layerHeight}mm`,
+                `Retraction Dist: ${settings.startDist.toFixed(2)} - ${settings.endDist.toFixed(2)} mm`,
+                `Retraction Speed: ${settings.startSpeed.toFixed(1)} - ${settings.endSpeed.toFixed(1)} mm/s`,
+                `Temps: Nozzle ${settings.nozzleTemp}C, Bed ${settings.bedTemp}C`,
+                 `Speeds: Initial ${settings.initialPrintSpeed} mm/s, Regular ${settings.regularPrintSpeed} mm/s, Travel ${settings.travelSpeed} mm/s`,
+                 `Cube: ${settings.cubeSize}x${settings.cubeSize}x${settings.cubeHeight}mm, Spacing: ${settings.cubeSpacing}mm`
+            ];
+
+            params.forEach(param => {
+                 if (yPos > 280) { doc.addPage(); yPos = 15; doc.setFontSize(10);}
+                 doc.text(param, 15, yPos);
+                 yPos += lineSpacing;
+            });
+
+            yPos += 5;
+            if (yPos > 275) { doc.addPage(); yPos = 15; }
+
+            doc.setFont("courier", "normal");
+            doc.setFontSize(8);
+            doc.text("Test Grid Key (#N = Print Order, Dist / Speed):", 10, yPos);
+            yPos += lineSpacing;
+
+            vizText.split('\n').forEach(line => {
+                if (yPos > 280) {
+                    doc.addPage(); yPos = 15; doc.setFont("courier", "normal"); doc.setFontSize(8);
+                }
+                const maxTextWidth = doc.internal.pageSize.getWidth() - 20;
+                 if (doc.getTextWidth(line) > maxTextWidth) {
+                     const approxCharsPerLine = Math.floor(maxTextWidth / (doc.getTextWidth('W') || 3));
+                     let linePart = line;
+                     while(linePart.length > 0) {
+                          if (yPos > 280) { doc.addPage(); yPos = 15; doc.setFont("courier", "normal"); doc.setFontSize(8); }
+                          doc.text(linePart.substring(0, approxCharsPerLine), 10, yPos);
+                          linePart = linePart.substring(approxCharsPerLine);
+                          if (linePart.length > 0) yPos += lineSpacing - 1;
+                     }
+                } else {
+                    doc.text(line, 10, yPos);
+                }
+                yPos += lineSpacing - 1;
+            });
+
+            // --- Add Interpretation Guide to PDF ---
+             if (yPos > 240) { doc.addPage(); yPos = 15; }
+
+             doc.setFont("helvetica", "normal");
+             doc.setFontSize(12);
+             yPos += 10;
+             doc.text("Interpretation Guide:", 10, yPos);
+             yPos += lineSpacing + 1;
+             doc.setFontSize(10);
+
+             const guide = [ // Keep guide text the same
+                "- Examine the print for stringing (fine hairs) between cubes.",
+                "- Look for blobs or zits on corners where retraction/unretraction occurs.",
+                "- Identify the cube(s) using the print order (#N) with the *least* stringing",
+                "  and *minimal* surface defects.",
+                "- Note the corresponding Retraction Distance and Speed from the key above.",
+                "- Start with these values in your slicer.",
+                "- Often, the fastest speed and shortest distance that *works well* is optimal.",
+                "- Very high speeds/distances can cause filament grinding or clogs - find the balance."
+             ];
+
+              guide.forEach(line => {
+                 if (yPos > 280) { doc.addPage(); yPos = 15; doc.setFont("helvetica", "normal"); doc.setFontSize(10); }
+                 doc.text(line, 10, yPos);
+                 yPos += lineSpacing;
+            });
+
+            // Update filename for PDF
+            const filename = `RetractionTestKey_${settings.startDist}-${settings.endDist}mm_${settings.startSpeed}-${settings.endSpeed}mms_Flow${settings.extrusionMultiplier}_Speeds${settings.initialPrintSpeed}-${settings.regularPrintSpeed}_ZHop${settings.zHopHeight}_Border${settings.printBorder}.pdf`;
+            doc.save(filename);
+
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            alert("Failed to generate PDF. See console for details. Ensure jsPDF library loaded correctly.");
+        }
+    }
+
+
+    // --- Event Listeners ---
+    inputs.forEach(input => {
+        input.addEventListener('input', calculateAndVisualize); // Update preview on any input change
+    });
+    generateBtn.addEventListener('click', generateGcode);
+    savePdfBtn.addEventListener('click', saveKeyAsPdf);
+
+    // --- Initial Calculation ---
+    window.addEventListener('load', calculateAndVisualize);
+
+</script>
+
+</body>
+</html>
