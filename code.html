@@ -651,7 +651,7 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
         const { vizText, settings } = calcData;
 
         try {
-            const doc = new jsPDF();
+            const doc = new jsPDF({ orientation: 'landscape' }); // Set orientation to landscape
 
             doc.setFontSize(16);
             doc.text("Retraction Test Key", 10, 15);
