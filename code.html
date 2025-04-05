@@ -5,87 +5,171 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retraction Test Generator</title>
     <style>
-        body {
-            font-family: sans-serif;
-            line-height: 1.6;
-            padding: 20px;
-            display: flex;
-            gap: 30px;
-            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        /* --- Dark Mode Styles --- */
+        :root {
+            --bg-color: #282c34; /* Dark background */
+            --text-color: #abb2bf; /* Light grey text */
+            --border-color: #444b58; /* Darker border */
+            --input-bg: #3a404a; /* Dark input background */
+            --input-border: #5c6370; /* Medium grey border */
+            --input-text: #dcdfe4; /* Lighter input text */
+            --button-bg: #61afef; /* Brighter blue button */
+            --button-hover-bg: #528bce; /* Slightly darker blue hover */
+            --button-text: #282c34; /* Dark text on button */
+            --preview-bg: #31363f; /* Slightly different dark for preview */
+            --preview-border: #444b58;
+            --preview-text: #c8ccd4; /* Lighter preview text */
+            --info-text: #9da5b4; /* Lighter info text */
+            --warning-text: #e5c07b; /* Lighter orange/yellow */
+            --link-color: #61afef;
+            --header-color: #61afef; /* Use button blue for headers */
         }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            padding: 25px;
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        h2, h3, h4 {
+            color: var(--header-color);
+            margin-bottom: 0.8em;
+        }
+        h4 {
+            margin-top: 1.5em;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.3em;
+        }
+
         .controls, .preview {
             flex: 1;
-            min-width: 400px; /* Increased min-width for better layout */
-            margin-bottom: 20px; /* Add space when wrapping */
+            min-width: 450px; /* Slightly wider */
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: var(--bg-color); /* Match body or slightly different if needed */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2); /* Slightly stronger shadow */
         }
+
         .controls form div {
-            margin-bottom: 15px;
+            margin-bottom: 18px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            flex-wrap: wrap; /* Allow input/label pairs to wrap */
+            gap: 12px;
+            flex-wrap: wrap;
         }
+
         .controls label {
-            min-width: 180px;
-            font-weight: bold;
-            flex-shrink: 0; /* Prevent label from shrinking */
+            min-width: 200px; /* Increased width */
+            font-weight: 500; /* Slightly less bold */
+            flex-shrink: 0;
+            color: var(--text-color);
         }
-        .controls input[type="number"], .controls input[type="text"], .controls textarea {
+
+        .controls input[type="number"],
+        .controls input[type="text"] {
             flex-grow: 1;
-            padding: 5px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            min-width: 80px; /* Ensure input has some minimum width */
+            padding: 4px 6px; /* Reduced padding */
+            border: 1px solid var(--input-border);
+            border-radius: 5px;
+            min-width: 60px; /* Reduced min-width */
+            background-color: var(--input-bg);
+            color: var(--input-text);
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
+        /* Keep textarea padding and other base styles separate */
+        .controls textarea {
+             padding: 8px 10px;
+             border: 1px solid var(--input-border);
+             border-radius: 5px;
+             background-color: var(--input-bg);
+             color: var(--input-text);
+             transition: border-color 0.2s, box-shadow 0.2s;
+             /* Existing specific textarea styles below */
+        }
+        .controls input:focus, .controls textarea:focus {
+            outline: none;
+            border-color: var(--button-bg);
+            box-shadow: 0 0 0 2px rgba(97, 175, 239, 0.3); /* Adjusted focus shadow color */
+        }
+
          .controls textarea {
-            min-height: 60px;
-            font-family: monospace;
-            width: 100%; /* Make textarea take full width */
+            min-height: 80px; /* Increased height */
+            font-family: 'Courier New', Courier, monospace;
+            width: 100%;
+            resize: vertical;
          }
-         /* Adjust checkbox alignment */
+
          .controls div:has(input[type="checkbox"]) {
             align-items: center;
          }
          .controls input[type="checkbox"] {
              flex-grow: 0;
+             width: 18px; /* Slightly larger */
+             height: 18px;
+             accent-color: var(--button-bg); /* Color the check */
          }
 
         .controls button {
-            padding: 10px 15px;
-            margin-top: 10px;
-            margin-right: 10px;
+            padding: 12px 18px; /* Increased padding */
+            margin-top: 15px;
+            margin-right: 12px;
             cursor: pointer;
-            background-color: #007bff;
-            color: white;
+            background-color: var(--button-bg);
+            color: var(--button-text);
             border: none;
-            border-radius: 4px;
+            border-radius: 5px;
+            font-weight: 500;
+            transition: background-color 0.2s;
         }
         .controls button:hover {
-            background-color: #0056b3;
+            background-color: var(--button-hover-bg);
         }
+
         .preview h3 {
             margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5em;
         }
+
         #visualization {
-            font-family: monospace;
+            font-family: 'Courier New', Courier, monospace;
             white-space: pre;
-            border: 1px solid #eee;
-            padding: 10px;
-            background-color: #f9f9f9;
-            overflow-x: auto; /* Handle large grids */
-            font-size: 0.9em; /* Slightly smaller font for denser display */
+            border: 1px solid var(--preview-border);
+            padding: 15px;
+            background-color: var(--preview-bg);
+            color: var(--preview-text);
+            overflow-x: auto;
+            font-size: 0.95em; /* Slightly larger */
+            border-radius: 5px;
+            margin-top: 10px;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
         }
+
         .warning {
-            color: orange;
+            color: var(--warning-text);
             font-size: 0.9em;
             margin-left: 5px;
         }
          .info {
-            font-size: 0.85em;
-            color: #555;
+            font-size: 0.9em; /* Slightly larger */
+            color: var(--info-text);
+            line-height: 1.5;
          }
+         .info b {
+             font-weight: 600;
+             color: var(--header-color);
+         }
+
     </style>
-    <!-- jsPDF Library -->
+     <!-- jsPDF Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
