@@ -23,6 +23,7 @@
             --warning-text: #e5c07b; /* Lighter orange/yellow */
             --link-color: #61afef;
             --header-color: #61afef; /* Use button blue for headers */
+            --renderer-bg: #31363f; /* Background for the 3D view */
         }
 
         body {
@@ -139,7 +140,24 @@
             padding-bottom: 0.5em;
         }
 
-        #visualization {
+        #gcode-preview-container {
+            width: 100%;
+            height: 400px; /* Adjust height as needed */
+            border: 1px solid var(--preview-border);
+            background-color: var(--renderer-bg);
+            margin-top: 10px;
+            border-radius: 5px;
+            position: relative; /* Needed for potential overlays or controls */
+            overflow: hidden; /* Ensure canvas stays within bounds */
+        }
+
+        #gcode-canvas {
+            display: block; /* Remove extra space below canvas */
+            width: 100%;
+            height: 100%;
+        }
+
+         #visualization-key { /* Style for the text key */
             font-family: 'Courier New', Courier, monospace;
             white-space: pre;
             border: 1px solid var(--preview-border);
@@ -147,11 +165,12 @@
             background-color: var(--preview-bg);
             color: var(--preview-text);
             overflow-x: auto;
-            font-size: 0.95em; /* Slightly larger */
+            font-size: 0.9em; /* Slightly smaller */
             border-radius: 5px;
-            margin-top: 10px;
+            margin-top: 15px; /* Space between renderer and key */
             transition: background-color 0.3s, color 0.3s, border-color 0.3s;
         }
+
 
         .warning {
             color: var(--warning-text);
@@ -171,6 +190,10 @@
     </style>
      <!-- jsPDF Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Three.js (Dependency for gcode-preview) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- gcode-preview Library -->
+    <script src="https://cdn.jsdelivr.net/npm/gcode-preview@latest/dist/gcode-preview.min.js"></script>
 </head>
 <body>
 
@@ -293,7 +316,11 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
         Print order is row-by-row (bottom-to-top), left-to-right within each row. <br>
         Distance increases left-to-right (X-axis). Speed increases bottom-to-top (Y-axis).
     </p>
-    <div id="visualization">Calculating...</div>
+    <div id="gcode-preview-container">
+        <canvas id="gcode-canvas"></canvas>
+    </div>
+    <h3>Test Grid Key</h3>
+    <div id="visualization-key">Calculating...</div>
      <p class="info" style="margin-top: 20px;">
         <b>Interpretation Guide:</b>
         <br>- Examine the print for stringing (fine hairs) between cubes. Use the (#N) to correlate.
@@ -312,8 +339,10 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
     const form = document.getElementById('settingsForm');
     const generateBtn = document.getElementById('generateBtn');
     const savePdfBtn = document.getElementById('savePdfBtn');
-    const visualizationDiv = document.getElementById('visualization');
+    const visualizationKeyDiv = document.getElementById('visualization-key'); // Renamed div for text key
+    const previewCanvas = document.getElementById('gcode-canvas');
     const inputs = form.querySelectorAll('input, textarea');
+    let gcodePreview; // Variable to hold the preview instance
 
     // --- Constants ---
     const F_MM_PER_MIN = 60; // Factor to convert mm/s to mm/min
@@ -328,14 +357,15 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
 
         // Basic validation
         if (settings.endDist < settings.startDist || settings.endSpeed < settings.startSpeed) {
-            visualizationDiv.textContent = "Error: End value cannot be less than start value for distance or speed.";
+            // visualizationDiv.textContent = "Error: End value cannot be less than start value for distance or speed."; // Old reference
+            visualizationKeyDiv.textContent = "Error: End value cannot be less than start value for distance or speed.";
             return null; // Indicate error
         }
         if (settings.layerHeight <= 0 || settings.nozzleDiameter <= 0 || settings.filamentDiameter <= 0 ||
             settings.cubeSize <= 0 || settings.cubeHeight <= 0 || settings.printBorder < 0 ||
             settings.zHopHeight < 0 || settings.extrusionMultiplier <= 0 ||
             settings.initialPrintSpeed <= 0 || settings.regularPrintSpeed <= 0) { // Added speed checks
-             visualizationDiv.textContent = "Error: Dimensions/Settings must be positive (Border/ZHop >= 0, Extrusion/Speeds > 0).";
+             visualizationKeyDiv.textContent = "Error: Dimensions/Settings must be positive (Border/ZHop >= 0, Extrusion/Speeds > 0).";
             return null;
         }
 
@@ -356,7 +386,7 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
         const availableY = Math.max(0, safeBedY - 2 * printBorder);
 
         if (availableX < cubeSize || availableY < cubeSize) {
-             visualizationDiv.textContent = `Error: Not enough space for even one cube within the ${printBorder}mm border.\nAvailable Area: ${availableX.toFixed(1)} x ${availableY.toFixed(1)} mm`;
+             visualizationKeyDiv.textContent = `Error: Not enough space for even one cube within the ${printBorder}mm border.\nAvailable Area: ${availableX.toFixed(1)} x ${availableY.toFixed(1)} mm`;
             return null;
         }
 
@@ -439,10 +469,10 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
               const paddingNeeded = Math.max(0, totalWidthPerCell - label.length);
               const leftPad = Math.floor(paddingNeeded / 2);
               const rightPad = Math.ceil(paddingNeeded / 2);
-              vizText += ' '.repeat(leftPad) + label + ' '.repeat(rightPad);
-         }
+               vizText += ' '.repeat(leftPad) + label + ' '.repeat(rightPad);
+          }
 
-        visualizationDiv.textContent = vizText;
+        visualizationKeyDiv.textContent = vizText; // Update the text key div
 
         // Return calculated data needed for G-code
         return {
@@ -456,21 +486,21 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
         };
     }
 
-    // --- G-code Generation ---
-    function generateGcode() {
-        const calcData = calculateAndVisualize();
+    // --- G-code Generation (Returns String) ---
+    function generateGcodeString() {
+        const calcData = calculateAndVisualize(); // Recalculate to ensure consistency
         if (!calcData) {
-             alert("Cannot generate G-code due to input errors or insufficient space. Please check the settings and preview.");
-             return;
+             console.error("Cannot generate G-code string due to input errors or insufficient space.");
+             return null; // Return null on error
         }
 
         const { settings, grid, numX, numY, effectiveSpacing, cubeSize } = calcData;
         if (!grid || grid.length === 0 || grid[0].length === 0) {
-             alert("Cannot generate G-code: Grid calculation failed.");
-             return;
+             console.error("Cannot generate G-code string: Grid calculation failed.");
+             return null;
         }
 
-        // --- G-code Settings & Constants ---
+         // --- G-code Settings & Constants (Copied from original generateGcode) ---
         const nozzleDiameter = settings.nozzleDiameter;
         const filamentDiameter = settings.filamentDiameter;
         const layerHeight = settings.layerHeight;
@@ -580,6 +610,9 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
 
         // --- Printing Loop ---
         let zHeight = 0;
+        let lastX = primeEndX; // Initialize last position to end of prime line
+        let lastY = primeEndY;
+        // const safeTravelOffset = settings.cubeSpacing / 2; // Removed - not needed for simple rectilinear
 
         for (let layer = 0; layer < numLayers; layer++) {
             zHeight = (layer === 0) ? firstLayerHeight : firstLayerHeight + (layer * layerHeight);
@@ -613,8 +646,22 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
                     }
                     if (zHopHeight > 0) {
                          gcode.push(`G1 Z${(zHeight + zHopHeight).toFixed(3)} F${zHopSpeedF} ; Z Hop Up`);
+                     }
+
+                    // --- Rectilinear Travel Move (X then Y) ---
+                    gcode.push(`; Rectilinear Travel to Cube #${printOrder}`);
+                    const targetX = c1.x; // Target is the starting corner of the *next* cube
+                    const targetY = c1.y;
+
+                    // Move from the accurately tracked lastX, lastY
+                    if (Math.abs(targetX - lastX) > 0.01) { // Check if X move is needed (use tolerance)
+                         gcode.push(`G0 F${travelSpeedF.toFixed(0)} X${targetX.toFixed(3)} ; Move X first`);
                     }
-                    gcode.push(`G0 F${travelSpeedF.toFixed(0)} X${c1.x.toFixed(3)} Y${c1.y.toFixed(3)} ; Travel to cube #${printOrder}`);
+                    if (Math.abs(targetY - lastY) > 0.01) { // Check if Y move is needed (use tolerance)
+                         gcode.push(`G0 F${travelSpeedF.toFixed(0)} Y${targetY.toFixed(3)} ; Then move Y`);
+                    }
+                    // --- End Rectilinear Travel Move ---
+
                     if (zHopHeight > 0) {
                          gcode.push(`G1 Z${zHeight.toFixed(3)} F${zHopSpeedF} ; Z Hop Down`);
                     }
@@ -645,6 +692,7 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
                     } // End Bottom Layer Specifics
 
                     // --- Walls (All layers) ---
+                    let lastWallEndX = 0, lastWallEndY = 0; // Track end of last wall segment
                     gcode.push(`; Print Walls (#${printOrder})`);
                     for (let wall = 0; wall < wallCount; wall++) {
                         const currentInset = (wall + 0.5) * extrusionWidth;
@@ -665,8 +713,18 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
                         gcode.push(`G1 X${w_c3.x.toFixed(3)} Y${w_c3.y.toFixed(3)} E${e.toFixed(4)}`);
                         gcode.push(`G1 X${w_c4.x.toFixed(3)} Y${w_c4.y.toFixed(3)} E${e.toFixed(4)}`);
                         gcode.push(`G1 X${w_c1.x.toFixed(3)} Y${w_c1.y.toFixed(3)} E${e.toFixed(4)}`);
+
+                        // Update the end position after the last segment of the *outermost* wall printed
+                        if (wall === wallCount - 1) {
+                             lastWallEndX = w_c1.x;
+                             lastWallEndY = w_c1.y;
+                        }
                     } // End wall loop
                      gcode.push(`; End Cube #${printOrder}`);
+
+                     // Update last position accurately to the end of the last printed wall segment
+                     lastX = lastWallEndX;
+                     lastY = lastWallEndY;
 
                 } // End X loop
             } // End Y loop
@@ -707,25 +765,38 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
         gcode.push(`M107 ; Turn off fan`);
         gcode.push(`M84 X Y E ; Disable X, Y, E steppers`);
 
+        return gcode.join('\n'); // Return the generated G-code as a single string
+    }
 
-        // --- Trigger Download ---
-        const gcodeBlob = new Blob([gcode.join('\n')], { type: 'text/plain' });
+    // --- G-code Download Function (Uses generateGcodeString) ---
+    function downloadGcode() {
+        const gcodeString = generateGcodeString();
+        if (!gcodeString) {
+            alert("Failed to generate G-code for download. Check console for errors.");
+            return;
+        }
+
+        // Need settings again for filename
+        const settings = {};
+        inputs.forEach(input => {
+            settings[input.id] = (input.type === 'checkbox') ? input.checked : (input.type === 'number' ? parseFloat(input.value) : input.value);
+        });
+
+        const gcodeBlob = new Blob([gcodeString], { type: 'text/plain' });
         const url = URL.createObjectURL(gcodeBlob);
         const a = document.createElement('a');
         a.href = url;
-        // Update filename to include Flow value
-        const filename = `RetractionTest_${settings.startDist}-${settings.endDist}mm_${settings.startSpeed}-${settings.endSpeed}mms_Flow${extrusionMultiplierPercent}_Speeds${initialPrintSpeed}-${regularPrintSpeed}_ZHop${zHopHeight}_Border${printBorder}.gcode`;
+        const filename = `RetractionTest_${settings.startDist}-${settings.endDist}mm_${settings.startSpeed}-${settings.endSpeed}mms_Flow${settings.extrusionMultiplier}_Speeds${settings.initialPrintSpeed}-${settings.regularPrintSpeed}_ZHop${settings.zHopHeight}_Border${settings.printBorder}.gcode`;
         a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
-        console.log("G-code generated successfully.");
+        console.log("G-code download triggered.");
     }
 
 
-    // --- PDF Generation ---
+    // --- PDF Generation (No changes needed here, uses calculateAndVisualize) ---
     function saveKeyAsPdf() {
         const calcData = calculateAndVisualize();
          if (!calcData) {
@@ -831,15 +902,77 @@ G29 ; Auto Bed Leveling (or M420 S1 if using saved mesh)
     }
 
 
+    // --- Update Preview and Render ---
+    function updatePreviewAndRender() {
+        const gcodeString = generateGcodeString(); // This also calls calculateAndVisualize for the key
+        if (gcodePreview) {
+            gcodePreview.clear(); // Clear the previous render first
+        }
+        if (gcodeString && gcodePreview) {
+            gcodePreview.processGCode(gcodeString);
+        } else if (!gcodeString) {
+            // Optional: Handle error case, maybe show message in preview area
+             console.log("G-code generation failed, preview not updated.");
+        }
+    }
+
     // --- Event Listeners ---
     inputs.forEach(input => {
-        input.addEventListener('input', calculateAndVisualize); // Update preview on any input change
+        // Update 3D render and text key on input change
+        input.addEventListener('input', updatePreviewAndRender);
     });
-    generateBtn.addEventListener('click', generateGcode);
+    // Button triggers download only
+    generateBtn.addEventListener('click', downloadGcode);
     savePdfBtn.addEventListener('click', saveKeyAsPdf);
 
-    // --- Initial Calculation ---
-    window.addEventListener('load', calculateAndVisualize);
+    // --- Initial Setup ---
+    window.addEventListener('load', () => {
+        // Initialize the G-code Preview
+        gcodePreview = GCodePreview.init({
+            canvas: previewCanvas,
+            // buildVolume: { x: 220, y: 220, z: 250 }, // Optional: Set initial build volume if known
+            initialCameraPosition: [0, 0, 300], // Zoom out a bit initially
+            allowDrag: true,
+            allowZoom: true,
+            allowRotate: true,
+            backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--renderer-bg').trim(), // Use CSS variable
+            // Add more configuration options as needed from gcode-preview docs
+             renderExtrusion: true,
+             renderTravel: true, // Enable rendering of travel moves
+             extrusionColor: '#61afef', // Match button blue
+             travelColor: '#e5c07b', // Use warning color for travel moves for better visibility
+        });
+
+        // Perform initial calculation and render
+        updatePreviewAndRender();
+
+        // Optional: Adjust build volume based on initial settings
+        const bedXInput = document.getElementById('bedX');
+        const bedYInput = document.getElementById('bedY');
+        const originCenterInput = document.getElementById('originCenter');
+        if (bedXInput && bedYInput && gcodePreview) {
+            const x = parseFloat(bedXInput.value) || 220;
+            const y = parseFloat(bedYInput.value) || 220;
+            const z = 250; // Default Z height for volume visualization
+            const isCenter = originCenterInput ? originCenterInput.checked : false;
+            gcodePreview.setBuildVolume(x, y, z, isCenter);
+        }
+
+         // Update build volume if bed dimensions change
+         [bedXInput, bedYInput, originCenterInput].forEach(el => {
+             if (el) {
+                 el.addEventListener('input', () => {
+                     const x = parseFloat(bedXInput.value) || 220;
+                     const y = parseFloat(bedYInput.value) || 220;
+                     const z = 250;
+                     const isCenter = originCenterInput ? originCenterInput.checked : false;
+                     if (gcodePreview) {
+                         gcodePreview.setBuildVolume(x, y, z, isCenter);
+                     }
+                 });
+             }
+         });
+    });
 
 </script>
 
